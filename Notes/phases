@@ -1,0 +1,66 @@
+"A Token-Bucket & Leaky-Bucket Rate Limiter (Distributed)"
+
+Phase1-- Concept to grasp: Fixed Windows, Sliding Windows,  Token Bucket,  Leaky Bucket
+*In-memory first approach, to expose the algorithm behind them before Redis Implementation approach.
+
+Phase2-- Clean Go architecture :  Http Handler ----  RateLimiter Interface ---- Bucket Implementation
+
+Phase3-- Request, Extract ClientID, Ask Limiter,  Allowed,  Next Handler
+
+Phase4-- Concurrency: Race conditions, mutexes, sync/atomic, false sharing, contention.  "Create bugs and fix bugs"
+
+Phase5-- Redis: Http---Redis---Lua Script---Atomic Update
+
+Phase6-- Distributed System: Instance A, B, C all sharing Redis
+
+Phase7-- Compare Fixed window, Sliding window, Token Buckets, Leaky Bucket
+
+Phase8-- Testing: Table driven test, Parallel tests, race detector, benchmarks
+
+Phase9-- Go internals: Pointers, Recievers, Analysis, Heap vs Stack, Garbage collection, Memory Layouts, Cache friendliness, Alignmnent,
+False sharing.
+
+CODING STANDARD TO FOLLOW:
+Keep Packages cohesive and responsiblities clear
+Prefer composition over inheritance
+Use interface where they provide value, not preemptively.
+Accept context.Context as the first parameter for operations that may block or interact with external systems.
+Return errors instead of panicking in library code.
+Write table-driven tests.
+Benchmark performance-critical paths.
+Document exported types and functions.
+Avoid global mutable state.
+Measure before optimizing.
+
+PROJECT STRUCTURE:::
+rate-limiter/
+├── cmd/
+│   └── server/
+│       └── main.go
+│
+├── internal/
+│   ├── limiter/
+│   │   ├── interface.go
+│   │   ├── tokenbucket.go
+│   │   ├── leakybucket.go
+│   │   ├── middleware.go
+│   │   ├── errors.go
+│   │   └── store/
+│   │       ├── memory.go
+│   │       └── redis.go
+│   │
+│   ├── redis/
+│   │   ├── client.go
+│   │   └── scripts/
+│   │       └── token_bucket.lua
+│   │
+│   └── config/
+│       └── config.go
+│
+├── tests/
+│   ├── integration/
+│   └── benchmark/
+│
+├── go.mod
+├── go.sum
+└── README.md
