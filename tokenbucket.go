@@ -5,17 +5,15 @@ import (
 	"time"
 )
 
-type TokenBucket struct {
-	//Configuration
-	capacity       int
-	refillInterval time.Duration
-
+type BucketState struct {
 	//Mutable state
-	tokens     int
-	lastRefill time.Time
+	Tokens     int
+	LastRefill time.Time
+}
 
-	//Dependencies
-	clock Clock
+type BucketConfig struct {
+	Capacity       int
+	RefillInterval time.Duration
 }
 
 func NewTokenBucket(capacity, refillRate int) (*TokenBucket, error) {
@@ -98,4 +96,31 @@ func (b *TokenBucket) Allow() bool {
 	b.tokens--
 
 	return true
+}
+
+// Pure function
+func Transition(cfg BucketConfig, state BucketState, now time.Time) (BucketState, bool) {
+	next := state
+
+	elapsed := now.Sub(state.LastRefill)
+
+	intervals := elapsed / cfg.RefillInterval
+
+	if intervals > 0 {
+		next.Tokens += int(intervals)
+
+		if next.Tokens > cfg.Capacity {
+			next.Tokens = cfg.Capacity
+		}
+
+		next.LastRefill = state.LastRefill.Add(intervals * cfg.RefillInterval)
+
+		if next.Tokens == 0 {
+			return next, false
+		}
+
+		next.Tokens--
+
+		return next, true
+	}
 }
