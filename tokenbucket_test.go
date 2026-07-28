@@ -1,4 +1,4 @@
-package rate_limiter_token_bucket_leaky_bucket
+package bucket
 
 import (
 	"sync"

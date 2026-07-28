@@ -1,20 +1,39 @@
-package rate_limiter_token_bucket_leaky_bucket
+package bucket
 
 import (
 	"fmt"
 	"time"
 )
 
-type BucketState struct {
-	//Mutable state
+type Config struct {
+	// private fields
+}
+
+func NewConfig(
+	capacity int,
+	refillInterval time.Duration,
+) (Config, error)
+
+func (c Config) Capacity() int
+func (c Config) RefillInterval() time.Duration
+
+type State struct {
 	Tokens     int
 	LastRefill time.Time
 }
 
-type BucketConfig struct {
-	Capacity       int
-	RefillInterval time.Duration
+type Decision struct {
+	State      State
+	Allowed    bool
+	Remaining  int
+	RetryAfter time.Duration
 }
+
+func Transition(
+	cfg Config,
+	state State,
+	now time.Time,
+) Decision
 
 func NewTokenBucket(capacity, refillRate int) (*TokenBucket, error) {
 	if capacity <= 0 {
