@@ -4,27 +4,31 @@ import "time"
 
 func Transition(cfg Config, state State, now time.Time) Decision {
 	next := state
+	interval := cfg.RefillInterval()
+	capacity := cfg.Capacity()
+	tokens := state.Tokens
 
 	elapsed := now.Sub(state.LastRefill)
 
-	intervals := elapsed / cfg.RefillInterval()
-
-	remainder := elapsed % cfg.RefillInterval()
-
-	retryAfter := cfg.RefillInterval() - remainder
-
-	tokensToAdd := int(intervals)
-
-	next.Tokens += tokensToAdd
-
-	if next.Tokens > cfg.Capacity() {
-		next.Tokens = cfg.Capacity()
+	if elapsed < 0 {
+		elapsed = 0
 	}
 
-	next.LastRefill = state.LastRefill.Add(intervals * cfg.RefillInterval())
+	intervals := elapsed / interval
+	remainder := elapsed % interval
+	retryAfter := interval - remainder
 
-	if next.Tokens > 0 {
-		next.Tokens--
+	tokensToAdd := int(intervals)
+	tokens += tokensToAdd
+
+	if tokens > capacity {
+		tokens = capacity
+	}
+
+	next.LastRefill = state.LastRefill.Add(intervals * interval)
+
+	if tokens > 0 {
+		tokens--
 
 		return Decision{
 			State:      next,
@@ -32,6 +36,7 @@ func Transition(cfg Config, state State, now time.Time) Decision {
 			RetryAfter: 0,
 		}
 	}
+
 	return Decision{
 		State: next,
 
