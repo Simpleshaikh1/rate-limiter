@@ -7,23 +7,36 @@ func Transition(cfg Config, state State, now time.Time) Decision {
 
 	elapsed := now.Sub(state.LastRefill)
 
-	interval := elapsed / cfg.RefillInterval()
+	intervals := elapsed / cfg.RefillInterval()
 
 	remainder := elapsed % cfg.RefillInterval()
 
-	_ = interval
-	_ = remainder
+	retryAfter := cfg.RefillInterval() - remainder
 
-	//if next.Tokens > 0 {
-	//	next.Tokens--
-	//
-	//	return Decision{
-	//		State:      next,
-	//		Allowed:    true,
-	//		RetryAfter: 0,
-	//	}
-	//}
+	tokensToAdd := int(intervals)
+
+	next.Tokens += tokensToAdd
+
+	if next.Tokens > cfg.Capacity() {
+		next.Tokens = cfg.Capacity()
+	}
+
+	next.LastRefill = state.LastRefill.Add(intervals * cfg.RefillInterval())
+
+	if next.Tokens > 0 {
+		next.Tokens--
+
+		return Decision{
+			State:      next,
+			Allowed:    true,
+			RetryAfter: 0,
+		}
+	}
 	return Decision{
 		State: next,
+
+		Allowed: false,
+
+		RetryAfter: retryAfter,
 	}
 }
