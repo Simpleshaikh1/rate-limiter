@@ -5,18 +5,25 @@ import "time"
 func Transition(cfg Config, state State, now time.Time) Decision {
 	next := state
 
-	if next.Tokens > 0 {
-		next.Tokens--
+	elapsed := now.Sub(state.LastRefill)
 
-		return Decision{
-			State:      next,
-			Allowed:    true,
-			RetryAfter: 0,
-		}
-	}
+	interval := elapsed / cfg.RefillInterval()
+
+	remainder := elapsed % cfg.RefillInterval()
+
+	_ = interval
+	_ = remainder
+
+	//if next.Tokens > 0 {
+	//	next.Tokens--
+	//
+	//	return Decision{
+	//		State:      next,
+	//		Allowed:    true,
+	//		RetryAfter: 0,
+	//	}
+	//}
 	return Decision{
-		State:      next,
-		Allowed:    false,
-		RetryAfter: cfg.RefillInterval(),
+		State: next,
 	}
 }
