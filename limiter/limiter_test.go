@@ -25,7 +25,7 @@ func TestLimiterConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			d := l.Allow()
+			d := l.Allow("")
 
 			if d.Allowed {
 				allowed.Add(1)
@@ -41,5 +41,26 @@ func TestLimiterConcurrent(t *testing.T) {
 			workers,
 			allowed.Load(),
 		)
+	}
+}
+
+func TestDifferentClientsHaveDifferentBuckets(t *testing.T) {
+	cfg, _ := bucket.NewConfig(1, time.Hour)
+
+	l := New(cfg)
+
+	first := l.Allow("alice")
+	if !first.Allowed {
+		t.Fatal("alice should be allowed")
+	}
+
+	second := l.Allow("alice")
+	if second.Allowed {
+		t.Fatal("alice should be rate limited")
+	}
+
+	third := l.Allow("bob")
+	if !third.Allowed {
+		t.Fatal("bob should have an independent bucket")
 	}
 }
