@@ -8,11 +8,7 @@ func Transition(cfg Config, state State, now time.Time) Decision {
 	capacity := cfg.Capacity()
 	tokens := state.Tokens
 
-	elapsed := now.Sub(state.LastRefill)
-
-	if elapsed < 0 {
-		elapsed = 0
-	}
+	elapsed := normalizeElapsed(now, state.LastRefill)
 
 	intervals := elapsed / interval
 	remainder := elapsed % interval
@@ -44,4 +40,19 @@ func Transition(cfg Config, state State, now time.Time) Decision {
 
 		RetryAfter: retryAfter,
 	}
+}
+
+// helpers
+func normalizeElapsed(
+	now time.Time,
+	last time.Time,
+) time.Duration {
+
+	elapsed := now.Sub(last)
+
+	if elapsed < 0 {
+		return 0
+	}
+
+	return elapsed
 }
