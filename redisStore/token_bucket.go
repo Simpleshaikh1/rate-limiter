@@ -14,6 +14,7 @@ local key = KEYS[1]
 local capacity = tonumber(ARGV[1])
 local refill_interval_ms = tonumber(ARGV[2])
 local now_ms = tonumber(ARGV[3])
+local ttl_ms = tonumber(ARGV[4])
 
 local data = redis.call("HMGET", key, "tokens", "last_refill_ms")
 
@@ -61,6 +62,11 @@ redis.call(
     "last_refill_ms",
     last_refill_ms
 )
+redis.call(
+    "PEXPIRE",
+    key,
+    ttl_ms
+)
 
 return {
     allowed,
@@ -75,6 +81,7 @@ func (s *Store) Allow(
 	key string,
 	capacity int,
 	refillInterval time.Duration,
+	ttl time.Duration,
 	now time.Time,
 ) (Decision, error) {
 	result, err := tokenBucketScript.Run(
@@ -85,6 +92,18 @@ func (s *Store) Allow(
 		refillInterval.Milliseconds(),
 		now.UnixMilli(),
 	).Result()
+
+	if ttl <= 0 {
+		return Decision{}, fmt.Errorf(
+			"ttl must be greater than zero",
+		)
+	}
+
+	if capacity <= 0 {
+		return Decision{}, fmt.Errorf(
+			"capacity must be greater than zero",
+		)
+	}
 
 	if err != nil {
 		return Decision{}, err

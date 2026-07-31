@@ -2,6 +2,7 @@ package redisstore
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -39,11 +40,14 @@ func TestStore_Allow_FirstRequest(t *testing.T) {
 
 	now := time.UnixMilli(1_000_000)
 
+	ttl := 5 * time.Second
+
 	got, err := store.Allow(
 		ctx,
 		key,
 		10,
 		time.Second,
+		ttl,
 		now,
 	)
 	if err != nil {
@@ -80,12 +84,15 @@ func TestStore_Allow_RejectsEmptyBucket(t *testing.T) {
 
 	now := time.UnixMilli(1_000_000)
 
+	ttl := 5 * time.Second
+
 	for i := 0; i < 10; i++ {
 		decision, err := store.Allow(
 			ctx,
 			key,
 			10,
 			time.Second,
+			ttl,
 			now,
 		)
 
@@ -106,6 +113,7 @@ func TestStore_Allow_RejectsEmptyBucket(t *testing.T) {
 		key,
 		10,
 		time.Second,
+		ttl,
 		now,
 	)
 
@@ -136,12 +144,15 @@ func TestStore_Allow_Refills(t *testing.T) {
 
 	base := time.UnixMilli(1_000_000)
 
+	ttl := 5 * time.Second
+
 	// Consume one.
 	first, err := store.Allow(
 		ctx,
 		key,
 		10,
 		time.Second,
+		ttl,
 		base,
 	)
 	if err != nil {
@@ -158,6 +169,7 @@ func TestStore_Allow_Refills(t *testing.T) {
 		key,
 		10,
 		time.Second,
+		ttl,
 		base.Add(time.Second),
 	)
 	if err != nil {
@@ -190,11 +202,14 @@ func TestStore_Allow_PreservesPartialInterval(t *testing.T) {
 
 	base := time.UnixMilli(1_000_000)
 
+	ttl := 5 * time.Second
+
 	first, err := store.Allow(
 		ctx,
 		key,
 		10,
 		time.Second,
+		ttl,
 		base,
 	)
 	if err != nil {
@@ -210,6 +225,7 @@ func TestStore_Allow_PreservesPartialInterval(t *testing.T) {
 		key,
 		10,
 		time.Second,
+		ttl,
 		base.Add(1500*time.Millisecond),
 	)
 	if err != nil {
@@ -234,6 +250,140 @@ func TestStore_Allow_PreservesPartialInterval(t *testing.T) {
 			"expected last refill %v, got %v",
 			expectedRefill,
 			second.LastRefill,
+		)
+	}
+}
+
+func TestStore_Allow_SetsTTL(t *testing.T) {
+	store := newTestStore(t)
+
+	ctx := context.Background()
+
+	key := "test:rate-limit:ttl"
+
+	defer store.client.Del(ctx, key)
+
+	now := time.UnixMilli(1_000_000)
+
+	ttl := 5 * time.Second
+
+	_, err := store.Allow(
+		ctx,
+		key,
+		10,
+		time.Second,
+		ttl,
+		now,
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actualTTL, err := store.client.PTTL(ctx, key).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if actualTTL <= 0 {
+		t.Fatal("expected key to have a TTL")
+	}
+
+	if actualTTL > ttl {
+		t.Fatalf(
+			"TTL %v is greater than configured TTL %v",
+			actualTTL,
+			ttl,
+		)
+	}
+}
+
+func TestStore_Allow_RefreshesTTL(t *testing.T) {
+	store := newTestStore(t)
+
+	ctx := context.Background()
+
+	key := "test:rate-limit:ttl-refresh"
+
+	defer store.client.Del(ctx, key)
+
+	now := time.UnixMilli(1_000_000)
+
+	ttl := 5 * time.Second
+
+	_, err := store.Allow(
+		ctx,
+		key,
+		10,
+		time.Second,
+		ttl,
+		now,
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	before, err := store.client.PTTL(ctx, key).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = store.Allow(
+		ctx,
+		key,
+		10,
+		time.Second,
+		ttl,
+		now.Add(100*time.Millisecond),
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := store.client.PTTL(ctx, key).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if after <= before {
+		t.Fatalf(
+			"expected TTL to refresh: before=%v after=%v",
+			before,
+			after,
+		)
+	}
+}
+
+func TestStore_Allow_ContextCancelled(t *testing.T) {
+	store := newTestStore(t)
+
+	ctx, cancel := context.WithCancel(
+		context.Background(),
+	)
+
+	cancel()
+
+	_, err := store.Allow(
+		ctx,
+		"test:rate-limit:cancelled",
+		10,
+		time.Second,
+		5*time.Second,
+		time.Now(),
+	)
+
+	if err == nil {
+		t.Fatal("expected context cancellation error")
+	}
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf(
+			"expected context.Canceled, got %v",
+			err,
 		)
 	}
 }
