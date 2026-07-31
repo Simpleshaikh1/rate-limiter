@@ -1,6 +1,12 @@
 package redisstore
 
-import "github.com/redis/go-redis/v9"
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
 
 var tokenBucketScript = redis.NewScript(`
 local key = KEYS[1]
@@ -63,3 +69,116 @@ return {
     retry_after_ms
 }
 `)
+
+func (s *Store) Allow(
+	ctx context.Context,
+	key string,
+	capacity int,
+	refillInterval time.Duration,
+	now time.Time,
+) (Decision, error) {
+	result, err := tokenBucketScript.Run(
+		ctx,
+		s.client,
+		[]string{key},
+		capacity,
+		refillInterval.Milliseconds(),
+		now.UnixMilli(),
+	).Result()
+
+	if err != nil {
+		return Decision{}, err
+	}
+
+	values, ok := result.([]interface{})
+	if !ok {
+		return Decision{}, fmt.Errorf(
+			"unexpected Redis response type: %T",
+			result,
+		)
+	}
+
+	if len(values) != 4 {
+		return Decision{}, fmt.Errorf(
+			"unexpected Redis response length: %d",
+			len(values),
+		)
+	}
+
+	allowed, err := redisInt(values[0])
+	if err != nil {
+		return Decision{}, fmt.Errorf(
+			"parse allowed: %w",
+			err,
+		)
+	}
+
+	tokens, err := redisInt(values[1])
+	if err != nil {
+		return Decision{}, fmt.Errorf(
+			"parse tokens: %w",
+			err,
+		)
+	}
+
+	lastRefillMs, err := redisInt64(values[2])
+	if err != nil {
+		return Decision{}, fmt.Errorf(
+			"parse last_refill_ms: %w",
+			err,
+		)
+	}
+
+	retryAfterMs, err := redisInt64(values[3])
+	if err != nil {
+		return Decision{}, fmt.Errorf(
+			"parse retry_after_ms: %w",
+			err,
+		)
+	}
+
+	return Decision{
+		Allowed:    allowed == 1,
+		Tokens:     tokens,
+		LastRefill: time.UnixMilli(lastRefillMs),
+		RetryAfter: time.Duration(retryAfterMs) * time.Millisecond,
+	}, nil
+}
+
+func redisInt(v interface{}) (int, error) {
+	n, err := redisInt64(v)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(n), nil
+}
+
+func redisInt64(v interface{}) (int64, error) {
+	switch value := v.(type) {
+	case int64:
+		return value, nil
+
+	case int:
+		return int64(value), nil
+
+	case string:
+		var n int64
+
+		_, err := fmt.Sscanf(value, "%d", &n)
+		if err != nil {
+			return 0, fmt.Errorf(
+				"invalid integer %q",
+				value,
+			)
+		}
+
+		return n, nil
+
+	default:
+		return 0, fmt.Errorf(
+			"unexpected integer type %T",
+			v,
+		)
+	}
+}
