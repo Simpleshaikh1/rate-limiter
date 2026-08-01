@@ -1,6 +1,8 @@
 package limiter
 
 import (
+	"context"
+	"errors"
 	"hash/fnv"
 	"sync"
 	"time"
@@ -8,7 +10,42 @@ import (
 	"github.com/Simpleshaikh1/rate-limiter/bucket"
 )
 
+var (
+	ErrInvalidCapacity       = errors.New("capacity must be greater than zero")
+	ErrInvalidRefillInterval = errors.New("refill interval must be greater than zero")
+	ErrInvalidTTL            = errors.New("ttl must be greater than zero")
+)
+
 const shardCount = 64
+
+type Config struct {
+	Capacity       int
+	RefillInterval time.Duration
+	TTL            time.Duration
+}
+
+//
+//cfg := Config{
+//Capacity:       100,
+//RefillInterval: time.Second,
+//TTL:            5 * time.Minute,
+//}
+
+func (c Config) Validate() error {
+	if c.Capacity <= 0 {
+		return ErrInvalidCapacity
+	}
+
+	if c.RefillInterval <= 0 {
+		return ErrInvalidRefillInterval
+	}
+
+	if c.TTL <= 0 {
+		return ErrInvalidTTL
+	}
+
+	return nil
+}
 
 type shard struct {
 	mu sync.Mutex
