@@ -1,7 +1,6 @@
 package limiter
 
 import (
-	"context"
 	"errors"
 	"hash/fnv"
 	"sync"
