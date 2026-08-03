@@ -23,13 +23,6 @@ type Config struct {
 	TTL            time.Duration
 }
 
-//
-//cfg := Config{
-//Capacity:       100,
-//RefillInterval: time.Second,
-//TTL:            5 * time.Minute,
-//}
-
 func (c Config) Validate() error {
 	if c.Capacity <= 0 {
 		return ErrInvalidCapacity
